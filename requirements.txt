@@ -1,0 +1,49 @@
+fastapi==0.104.1
+uvicorn[standard]>=0.24.0
+python-dotenv==1.0.0
+python-multipart==0.0.9
+numpy>=2.1.0
+
+# LangChain
+langchain>=0.1.16
+langchain-community>=0.0.38
+langchain-core>=0.1.52
+langchain-text-splitters>=0.0.2
+
+# Embeddings & Transformers
+sentence-transformers
+transformers
+accelerate
+torch>=2.2.0
+scikit-learn>=1.4.0
+
+# Vector DB
+qdrant-client>=1.7.1
+pgvector
+psycopg2-binary==2.9.9; python_version < "3.13"
+
+# Document Processing
+# unstructured[all-docs]==0.10.26 # Removed heavy dependency
+# marker-pdf==1.10.1 (Removed to avoid Torch/Numpy build issues)
+PyPDF2==3.0.1
+python-docx==1.1.0
+pymupdf # Added explicitly for fitz (Unpinned for Py3.13)
+
+# LLM
+ollama
+httpx
+nltk==3.8.1
+
+# Database
+sqlalchemy==2.0.23
+aiosqlite
+alembic==1.8.1
+
+# Utils
+tqdm==4.66.1
+pillow
+pytesseract
+pydantic>=2.7.0
+
+# UI
+streamlit
