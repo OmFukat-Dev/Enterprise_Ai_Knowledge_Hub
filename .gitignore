@@ -1,42 +1,32 @@
+# Environment variables
+.env
 
-# Python
-__pycache__/
-*.py[cod]
-*$py.class
-
-# Virtual Environment
+# Virtual environments
 .venv/
 venv/
-ENV/
 env/
+ENV/
 
-# Environment Variables
-.env
-.env.local
-.env.*.local
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
 
-# Database
-*.sqlite3
-*.db
+# User-specific files
+git_debug.txt
+git_debug_v2.txt
+remote_url.txt
+amend_push.log
+git_status.log
+push_output.txt
+setup.log
+log_final.txt
+status.txt
+status_final.txt
 
-# Temporary Files
+# Temporary/Data files
 tmp/
-temp/
-*.log
-logs/
-
-# IDE
-.vscode/
-.idea/
-
-# Data & Uploads
 data/
 upload/
-uploads/
-results/
-dataset/
-
-# Build artifacts
-dist/
-build/
-*.egg-info/
+logs/
