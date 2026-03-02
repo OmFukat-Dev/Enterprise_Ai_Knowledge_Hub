@@ -1,138 +1,82 @@
-# Enterprise AI Knowledge Hub: Advanced RAG + MLOps (Free Stack)
+# Enterprise AI Knowledge Hub (Free and Open-Source Stack)
 
-**Senior/Principal Engineer Level Project** – Zero AWS, Zero Docker, 100% Free, More Advanced Than Most Corporate Projects
+RAG application with:
+- FastAPI backend
+- Streamlit frontend
+- Local embeddings + reranking (`sentence-transformers`)
+- Open-source vector storage (`Qdrant` local mode)
+- Local LLM inference (`Ollama`)
 
-## ✨ Features
+No paid API keys are required.
 
-### Document Processing
-- 📄 Marker + Unstructured for perfect PDF/table extraction
-- 🔍 Semantic + hierarchical chunking
-- 🧠 Context-aware document understanding
+## Architecture
 
-### Vector Database
-- 🗄️ Qdrant vector DB (local, production-grade)
-- 🔍 BGE embeddings + Cross-encoder reranking
-- ⚡ High-performance similarity search
+- `app.py`: FastAPI API (`/api/upload`, `/api/ask`, `/health`)
+- `frontend/dashboard.py`: Streamlit UI
+- `src/ingestion/*`: PDF extraction and chunking
+- `src/retrieval/vector_store.py`: Qdrant local + in-memory fallback
+- `src/generation/llm_integration.py`: local Ollama generation
+- `src/core/*`, `src/models/*`, `src/api/routers/*`: auth/data layer
 
-### AI & ML
-- 🤖 Groq Llama-3.1-70B inference (blazing fast)
-- 🧠 Advanced RAG (Retrieval-Augmented Generation)
-- 📊 Streamlit evaluation dashboard with MRR/HitRate
+## Quick Start (Windows)
 
-### Backend & Infrastructure
-- 🚀 FastAPI backend (no Docker needed)
-- 🔄 ZenML MLOps pipelines ready
-- 📈 Scalable architecture
-
-## 🚀 Quick Start
-```bash
-venv\Scripts\activate
-uvicorn src.api.app:app --reload
-# Open http://127.0.0.1:8000/docs
+1. Create env file:
+```powershell
+Copy-Item .env.example .env
 ```
 
-### Prerequisites
-- Python 3.8+
-- pip
-- Git
-
-### Installation
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/yourusername/enterprise-ai-knowledge-hub.git
-   cd enterprise-ai-knowledge-hub
-   ```
-
-2. **Set up a virtual environment**
-   ```bash
-   python -m venv venv
-   .\venv\Scripts\activate  # Windows
-   # OR
-   source venv/bin/activate  # Linux/Mac
-   ```
-
-3. **Install dependencies**
-   ```bash
-   pip install -r requirements.txt
-   ```
-
-4. **Run the application**
-   ```bash
-   # Start both backend and frontend
-   .\run.bat  # Windows
-   # OR
-   ./run.sh    # Linux/Mac
-   ```
-   - Backend API: http://localhost:8000/api/docs
-   - Frontend: http://localhost:8501
-
-## 🏗️ Project Structure
-
-```
-enterprise-ai-knowledge-hub/
-├── src/                    # Source code
-│   ├── api/               # FastAPI application
-│   ├── ingestion/         # Document processing
-│   ├── retrieval/         # Vector store and search
-│   └── generation/        # LLM integration
-├── data/                  # Processed data storage
-├── frontend/              # Streamlit UI components
-├── tests/                 # Test cases
-├── main.py               # Application entry point
-├── dashboard.py          # Streamlit dashboard
-├── requirements.txt      # Python dependencies
-└── README.md            # This file
+2. Create and activate venv:
+```powershell
+python -m venv venv
+.\venv\Scripts\activate
 ```
 
-## ⚙️ Configuration
-
-Create a `.env` file in the root directory with your configuration:
-
-```env
-# Required
-GROQ_API_KEY=your_groq_api_key
-
-# Optional
-QDRANT_PATH=./data/qdrant_db
+3. Install dependencies:
+```powershell
+pip install -r requirements.txt
 ```
 
-## 🛠️ Development
-
-### Running in Development Mode
-
-1. **Start the backend server**
-   ```bash
-   uvicorn main:app --reload --port 8000
-   ```
-
-2. **Start the frontend** (in a new terminal)
-   ```bash
-   streamlit run dashboard.py
-   ```
-
-### Testing
-
-Run the test suite with:
-```bash
-pytest tests/
+4. Install Ollama and pull model:
+```powershell
+ollama pull llama3
 ```
 
-## 🤝 Contributing
+5. Run frontend-only mode (default in `run.bat`):
+```powershell
+.\run.bat
+```
 
-1. Fork the repository
-2. Create a feature branch (`git checkout -b feature/AmazingFeature`)
-3. Commit your changes (`git commit -m 'Add some AmazingFeature'`)
-4. Push to the branch (`git push origin feature/AmazingFeature`)
-5. Open a Pull Request
+6. Run backend API separately (optional):
+```powershell
+uvicorn app:app --host 0.0.0.0 --port 8000 --reload
+```
 
-## 📄 License
+## API Endpoints
 
-This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
+- `GET /health`
+- `POST /api/upload` (multipart form with `file=.pdf`)
+- `POST /api/ask` (form field `question`)
+- Swagger: `http://127.0.0.1:8000/api/docs`
 
-## 🙏 Acknowledgments
+## Database and Migrations
 
-- Built with FastAPI, Streamlit, and Qdrant
-- Uses BERT-based sentence transformers for embeddings
-- Inspired by modern RAG (Retrieval-Augmented Generation) architectures
-- Special thanks to the open-source community for their invaluable tools and libraries
+Default DB is SQLite:
+- `DATABASE_URL=sqlite+aiosqlite:///./enterprise_ai_hub.db`
+
+Run migrations:
+```powershell
+alembic upgrade head
+```
+
+## Free Deployment Options
+
+- Backend: Fly.io free allowance / Railway hobby free windows vary / self-hosted VPS
+- Frontend: Streamlit Community Cloud (for UI-only patterns) or self-hosted
+- Recommended for full free + no billing lock-in: self-hosted on local machine, mini PC, or free community compute where available
+
+## Security Notes
+
+- Do not commit real secrets in `.env`
+- Rotate `SECRET_KEY` and `JWT_SECRET_KEY` before any public deployment
+- Keep CORS restricted in production
+

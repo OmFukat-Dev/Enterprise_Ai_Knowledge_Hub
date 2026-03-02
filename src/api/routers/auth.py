@@ -3,10 +3,13 @@ from typing import Any
 from fastapi import APIRouter, Depends, HTTPException, status, Request
 from fastapi.security import OAuth2PasswordRequestForm
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
+from datetime import datetime
 
 from ...core.database import get_db
 from ...core.security import (
     get_password_hash,
+    verify_password,
     create_access_token,
     authenticate_user,
     get_current_active_user,
@@ -54,10 +57,11 @@ async def register_user(
     )
     
     # Add default user role
-    default_role = await db.execute(
+    default_role_result = await db.execute(
         select(Role).where(Role.name == "user")
     )
-    if default_role.scalar_one_or_none() is None:
+    default_role = default_role_result.scalar_one_or_none()
+    if default_role is None:
         # Create default roles if they don't exist
         admin_role = Role(name="admin", description="Administrator")
         user_role = Role(name="user", description="Regular user")
@@ -66,7 +70,7 @@ async def register_user(
         await db.refresh(user_role)
         db_user.roles.append(user_role)
     else:
-        db_user.roles.append(default_role.scalar_one())
+        db_user.roles.append(default_role)
     
     db.add(db_user)
     await db.commit()

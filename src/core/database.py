@@ -1,10 +1,9 @@
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession, async_sessionmaker
-from sqlalchemy.orm import sessionmaker, declarative_base
+from sqlalchemy.orm import declarative_base
 from sqlalchemy.pool import NullPool
 import os
 from dotenv import load_dotenv
 from typing import AsyncGenerator, Generator
-from contextlib import asynccontextmanager
 from ..config import settings
 
 # Load environment variables
@@ -46,23 +45,16 @@ async_session_factory = async_sessionmaker(
     autocommit=False
 )
 
-@asynccontextmanager
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
-    """Async context manager for database sessions."""
+    """FastAPI dependency that yields a database session."""
     session = async_session_factory()
     try:
         yield session
-        await session.commit()
     except Exception as e:
         await session.rollback()
         raise e
     finally:
         await session.close()
-
-# Dependency for FastAPI
-def get_db_session() -> AsyncGenerator[AsyncSession, None]:
-    """Dependency for FastAPI to get database session."""
-    return get_db()
 
 # For testing
 async def create_tables():

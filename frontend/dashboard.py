@@ -1,135 +1,302 @@
-# frontend/dashboard.py
-import streamlit as st
-import requests
 import os
-import tempfile
 import sys
+import tempfile
 from pathlib import Path
-from typing import List
+from typing import List, Dict
+
+import requests
+import streamlit as st
 
 _root = Path(__file__).resolve().parent.parent
 if str(_root) not in sys.path:
     sys.path.insert(0, str(_root))
 
-DIRECT_MODE = os.getenv("DIRECT_MODE", "0") == "1" or os.getenv("STREAMLIT_ONLY", "0") == "1"
+from dotenv import load_dotenv
+load_dotenv(dotenv_path=_root / ".env")
 
-st.set_page_config(page_title="Enterprise AI Knowledge Hub", layout="wide")
+# ── Configuration ─────────────────────────────────────────────────────────
+# Bug 11 Fix: DIRECT_MODE detection moved after dotenv load so env vars are available
+DIRECT_MODE = os.getenv("DIRECT_MODE", "0") == "1" or os.getenv("STREAMLIT_ONLY", "1") == "1"
+API_URL = os.getenv("API_URL", "http://127.0.0.1:8000/api")
+RERANK_TOP_K = int(os.getenv("RERANK_TOP_K", "5"))
+RETRIEVAL_K = int(os.getenv("RETRIEVAL_K", "15"))
+SCORE_THRESHOLD = float(os.getenv("SCORE_THRESHOLD", "0.0"))
 
-API_URL = "http://127.0.0.1:8000/api"
+# ── Page config ───────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="Enterprise AI Knowledge Hub",
+    page_icon="🧠",
+    layout="wide",
+    initial_sidebar_state="expanded",
+)
+
+# ── Custom CSS ─────────────────────────────────────────────────────────────
+st.markdown("""
+<style>
+    .answer-container {
+        background: #f0f7ff;
+        border-left: 4px solid #1f77b4;
+        padding: 1rem 1.2rem;
+        border-radius: 6px;
+        margin-top: 0.5rem;
+    }
+    .source-chip {
+        display: inline-block;
+        background: #e8f4ea;
+        border: 1px solid #4caf50;
+        border-radius: 12px;
+        padding: 2px 10px;
+        font-size: 0.8rem;
+        margin: 2px 3px;
+        color: #256029;
+    }
+    .chat-user {
+        background: #e3f2fd;
+        color: #0d47a1 !important;
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 4px 0;
+        font-weight: 500;
+    }
+    .chat-bot {
+        background: #f1f8e9;
+        color: #1b5e20 !important;
+        border-radius: 10px;
+        padding: 8px 12px;
+        margin: 4px 0;
+        font-weight: 500;
+    }
+</style>
+""", unsafe_allow_html=True)
+
+# ── API availability check ─────────────────────────────────────────────────
 if not DIRECT_MODE:
     try:
-        r = requests.get(f"{API_URL}/health", timeout=1)
-        if r.status_code != 200:
-            DIRECT_MODE = True
+        r = requests.get(f"{API_URL}/health", timeout=2)
+        DIRECT_MODE = r.status_code != 200
     except Exception:
         DIRECT_MODE = True
 
-st.title("Enterprise AI Knowledge Hub")
-st.markdown("**Senior/Principal Engineer Project** — Full RAG + MLOps, Zero Cost, Zero Docker")
+# ── Session state init ─────────────────────────────────────────────────────
+if "chat_history" not in st.session_state:
+    st.session_state.chat_history: List[Dict[str, str]] = []
+if "documents_indexed" not in st.session_state:
+    st.session_state.documents_indexed: List[str] = []
 
-col1, col2 = st.columns([1, 1])
 
+# ── Cached resources ────────────────────────────────────────────────────────
 @st.cache_resource
 def _cached_store():
     from src.retrieval.vector_store import get_vector_store
     return get_vector_store()
 
+
 @st.cache_resource
 def _cached_reranker():
-    try:
-        from sentence_transformers import CrossEncoder
-        return CrossEncoder("cross-encoder/ms-marco-MiniLM-L-12-v2")
-    except Exception:
-        return None
+    from src.retrieval.models import get_reranker_model
+    return get_reranker_model()
 
-with col1:
-    st.header("Upload Document")
-    uploaded = st.file_uploader("Drop your PDF here", type="pdf")
-    
+
+# ── Header ─────────────────────────────────────────────────────────────────
+st.title("🧠 Enterprise AI Knowledge Hub")
+st.caption("Upload your documents, then ask anything — powered by local LLM, 100% free & private.")
+
+col_upload, col_chat = st.columns([1, 2], gap="large")
+
+
+# ── Upload panel ────────────────────────────────────────────────────────────
+with col_upload:
+    st.subheader("📂 Upload Documents")
+    uploaded = st.file_uploader(
+        "Drop a PDF, DOCX, or TXT file",
+        type=["pdf", "docx", "txt"],
+        help="The document will be chunked and indexed into the vector store.",
+    )
+
     if uploaded:
-        with st.spinner("Processing PDF..."):
-            if DIRECT_MODE:
-                from src.ingestion.extract_text import TextExtractor
-                from src.ingestion.chunking import semantic_chunk_documents
-                extractor = TextExtractor()
-                tmp_file = tempfile.NamedTemporaryFile(delete=False, suffix=".pdf")
-                tmp_file.write(uploaded.getvalue())
-                tmp_file.flush()
-                tmp = tmp_file.name
-                tmp_file.close()
-                docs = extractor.extract_from_pdf_advanced(tmp)
-                chunks = semantic_chunk_documents(docs)
-                store = _cached_store()
-                store.add_documents(chunks)
-                st.success(f"Success: Ingested {len(chunks)} chunks from {uploaded.name}")
-                st.balloons()
-                try:
-                    os.remove(tmp)
-                except Exception:
-                    pass
-            else:
-                files = {"file": (uploaded.name, uploaded.getvalue(), "application/pdf")}
-                r = requests.post(f"{API_URL}/upload", files=files)
-                if r.status_code == 200:
-                    result = r.json()
-                    st.success(f"Success: Ingested {result['chunks']} chunks from {uploaded.name}")
-                    st.balloons()
-                else:
-                    st.error(f"Error: {r.text}")
+        if uploaded.name not in st.session_state.documents_indexed:
+            with st.spinner(f"Indexing **{uploaded.name}**..."):
+                if DIRECT_MODE:
+                    from pipelines.ingestion_pipeline import run_ingestion
 
-with col2:
-    st.header("Ask Questions")
-    question = st.text_input("What do you want to know?", placeholder="e.g., What is the conclusion of the thesis?")
-    
-    if st.button("Get Answer", type="primary") and question:
-        with st.spinner("Generating answer..."):
-            if DIRECT_MODE:
-                from src.generation.llm_integration import generate_answer
-                store = _cached_store()
-                try:
-                    results = store.similarity_search(question, k=8)
-                except Exception as e:
-                    st.error(f"Search failed: {str(e)}")
-                    results = []
-                texts: List[str] = [r[0] for r in results] if results else []
-                if not texts:
-                    st.warning("No relevant chunks found. Please upload documents or refine the question.")
-                    st.stop()
-                reranker = _cached_reranker()
-                if reranker:
+                    tmp_file = tempfile.NamedTemporaryFile(
+                        delete=False, suffix=os.path.splitext(uploaded.name)[-1]
+                    )
+                    tmp_file.write(uploaded.getvalue())
+                    tmp_file.flush()
+                    tmp = tmp_file.name
+                    tmp_file.close()
+
+                    result = run_ingestion(tmp, store=_cached_store())
                     try:
-                        scores = reranker.predict([(question, t) for t in texts])
-                        pairs = list(zip(texts, scores))
-                        pairs.sort(key=lambda x: x[1], reverse=True)
-                        top = [t for t, _ in pairs[:3]]
-                        context = "\n\n".join(top)
+                        os.remove(tmp)
                     except Exception:
-                        context = "\n\n".join(texts[:3])
+                        pass
+
+                    if result["status"] == "success" and result["chunks_indexed"] > 0:
+                        st.session_state.documents_indexed.append(uploaded.name)
+                        st.success(
+                            f"✅ Indexed **{result['chunks_indexed']}** chunks from `{uploaded.name}`"
+                        )
+                        st.balloons()
+                    else:
+                        st.error(f"❌ {result.get('error', 'Could not extract text.')}")
                 else:
-                    context = "\n\n".join(texts[:3])
-                ans = generate_answer(question, context)
-                st.success("Here is your answer:")
-                st.markdown(f"{ans}")
-                with st.expander("Show retrieved chunks"):
-                    st.caption(context[:800] + "...")
-            else:
-                response = requests.post(
-                    f"{API_URL}/ask",
-                    data={"question": question},
-                    headers={"Content-Type": "application/x-www-form-urlencoded"}
+                    files = {"file": (uploaded.name, uploaded.getvalue(), "application/octet-stream")}
+                    r = requests.post(f"{API_URL}/upload", files=files)
+                    if r.status_code == 200:
+                        result = r.json()
+                        st.session_state.documents_indexed.append(uploaded.name)
+                        st.success(
+                            f"✅ Indexed **{result.get('chunks_indexed', '?')}** chunks "
+                            f"from `{uploaded.name}`"
+                        )
+                        st.balloons()
+                    else:
+                        st.error(f"❌ Upload failed: {r.text}")
+        else:
+            st.info(f"`{uploaded.name}` is already indexed.")
+
+    if st.session_state.documents_indexed:
+        st.markdown("**Indexed documents:**")
+        for name in st.session_state.documents_indexed:
+            st.markdown(f"- 📄 `{name}`")
+
+    st.divider()
+    st.markdown("**ℹ️ Requirements**")
+    st.markdown(
+        "- Ollama must be running: `ollama serve`\n"
+        f"- Model must be pulled: `ollama pull {os.getenv('LLM_MODEL', 'llama3')}`"
+    )
+
+
+# ── Chat panel ──────────────────────────────────────────────────────────────
+with col_chat:
+    st.subheader("💬 Ask Questions")
+
+    # Show chat history
+    for turn in st.session_state.chat_history:
+        if turn["role"] == "user":
+            st.markdown(
+                f'<div class="chat-user">🧑 <b>You:</b> {turn["content"]}</div>',
+                unsafe_allow_html=True,
+            )
+        else:
+            # Bot responses use st.markdown for proper markdown rendering (not raw HTML injection)
+            with st.container():
+                st.markdown(
+                    '<div class="chat-bot">🤖 <b>Assistant:</b></div>',
+                    unsafe_allow_html=True,
                 )
+                st.markdown(turn["content"])
+
+    question = st.text_input(
+        "Your question",
+        placeholder="e.g., What are the main conclusions of the document?",
+        label_visibility="collapsed",
+    )
+
+    btn_col, clear_col = st.columns([3, 1])
+    with btn_col:
+        ask_btn = st.button("🔍 Get Answer", type="primary", use_container_width=True)
+    with clear_col:
+        if st.button("🗑️ Clear History", use_container_width=True):
+            st.session_state.chat_history = []
+            st.rerun()
+
+    if ask_btn and question and question.strip():
+        with st.spinner("Searching documents and generating answer..."):
+            if DIRECT_MODE:
+                from pipelines.retrieval_pipeline import run_retrieval
+
+                result = run_retrieval(
+                    question,
+                    history=st.session_state.chat_history,
+                    store=_cached_store(),
+                )
+                ans = result["answer"]
+                sources = result["sources"]
+                top_texts = [result["context_preview"]]
+
+            else:
+                payload = {
+                    "question": question,
+                    "history": st.session_state.chat_history,
+                }
+                response = requests.post(f"{API_URL}/ask", json=payload)
                 if response.status_code == 200:
                     result = response.json()
-                    st.success("Here is your answer:")
-                    st.markdown(f"{result['answer']}")
-                    if "context_preview" in result:
-                        with st.expander("Show retrieved chunks"):
-                            st.caption(result["context_preview"])
+                    ans = result.get("answer", "No answer returned.")
+                    sources = result.get("sources", [])
+                    context = result.get("context_preview", "")
+                    top_texts = [context]
                 else:
-                    st.error(f"Error {response.status_code}: {response.text}")
+                    st.error(f"API Error {response.status_code}: {response.text}")
+                    st.stop()
 
-if DIRECT_MODE:
-    st.sidebar.success("Running in single-process mode!")
-else:
-    st.sidebar.success(f"Using backend API: {API_URL}")
-st.sidebar.info("Built with:\n- LangChain 0.1.16\n- Groq Llama-3.3-70B\n- Qdrant / PgVector\n- Unstructured + BGE Reranker")
+            # ── Update history ──────────────────────────────────────────
+            st.session_state.chat_history.append({"role": "user", "content": question})
+            st.session_state.chat_history.append({"role": "assistant", "content": ans})
+
+            # ── Display answer ──────────────────────────────────────────
+            # Bug 11 Fix: Use st.container + st.markdown instead of raw HTML injection.
+            # This renders markdown (bold, bullet lists, code blocks) from LLM responses correctly.
+            st.markdown("**Answer:**")
+            with st.container():
+                st.markdown('<div class="answer-container">', unsafe_allow_html=True)
+                st.markdown(ans)
+                st.markdown('</div>', unsafe_allow_html=True)
+
+            # ── Sources ─────────────────────────────────────────────────
+            if sources:
+                st.markdown("**Sources:**")
+                chips = "".join(
+                    f'<span class="source-chip">📄 {s["file"]} — page {s["page"]}</span>'
+                    for s in sources
+                )
+                st.markdown(chips, unsafe_allow_html=True)
+
+            # ── Context preview ─────────────────────────────────────────
+            with st.expander("🔍 Show retrieved context chunks"):
+                preview = "\n\n---\n\n".join(top_texts)
+                st.caption(preview[:1500] + ("..." if len(preview) > 1500 else ""))
+
+            st.rerun()
+
+    elif ask_btn and not question.strip():
+        st.warning("Please enter a question.")
+
+
+# ── Sidebar ────────────────────────────────────────────────────────────────
+with st.sidebar:
+    st.header("System Info")
+
+    mode_label = "🟢 Single-process mode" if DIRECT_MODE else f"🔵 Backend API: `{API_URL}`"
+    st.success(mode_label)
+
+    # Show vector store document count
+    try:
+        store = _cached_store()
+        doc_count = store.get_document_count()
+        st.metric("Vectors indexed", doc_count)
+    except Exception:
+        pass
+
+    st.markdown("---")
+    st.markdown("**Stack (all free)**")
+    st.markdown(
+        "- 🤖 Ollama (local LLM)\n"
+        "- 🧬 BAAI/bge-large-en-v1.5 (embeddings)\n"
+        "- 🔎 ms-marco CrossEncoder (reranker)\n"
+        "- 🗄️ Qdrant local (vector DB)\n"
+        "- 🖥️ FastAPI + Streamlit\n"
+    )
+    st.markdown("---")
+    st.markdown("**Retrieval Settings**")
+    st.markdown(
+        f"- Retrieval k: `{RETRIEVAL_K}`\n"
+        f"- Rerank top-k: `{RERANK_TOP_K}`\n"
+        f"- Score threshold: `{SCORE_THRESHOLD}`\n"
+        f"- Model: `{os.getenv('LLM_MODEL', 'llama3')}`\n"
+        f"- Context window: `{os.getenv('LLM_NUM_CTX', '8192')} tokens`"
+    )

@@ -2,27 +2,26 @@ from functools import lru_cache
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from typing import Optional, List
 import os
-from pathlib import Path
 
 class Settings(BaseSettings):
     # Application
     APP_NAME: str = "Enterprise AI Knowledge Hub"
     DEBUG: bool = os.getenv("DEBUG", "false").lower() == "true"
     ENVIRONMENT: str = os.getenv("ENVIRONMENT", "development")
-    SECRET_KEY: str = os.getenv("SECRET_KEY", "dev-secret-key")
-    API_PREFIX: str = "/api/v1"
+    SECRET_KEY: str = os.getenv("SECRET_KEY", "change-me-in-production")
+    API_PREFIX: str = "/api"
     ALLOWED_ORIGINS: List[str] = ["*"]
     
     # Database
     DATABASE_URL: str = os.getenv(
         "DATABASE_URL", 
-        "postgresql+asyncpg://postgres:postgres@localhost:5432/knowledgehub"
+        "sqlite+aiosqlite:///./enterprise_ai_hub.db"
     )
     DB_POOL_SIZE: int = int(os.getenv("DB_POOL_SIZE", "5"))
     DB_MAX_OVERFLOW: int = int(os.getenv("DB_MAX_OVERFLOW", "10"))
     
     # JWT
-    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "jwt-secret-key")
+    JWT_SECRET_KEY: str = os.getenv("JWT_SECRET_KEY", "change-me-in-production")
     JWT_ALGORITHM: str = "HS256"
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 60 * 24 * 7  # 7 days
     
