@@ -1,0 +1,215 @@
+INSTALLATION GUIDE 
+===================  
+  
+1. Project Overview  
+This project is a local, free, and private Retrieval-Augmented Generation system. It lets you upload documents PDF, DOCX, TXT, indexes them into a local vector database, and answers questions using a local LLM. The backend API is built with FastAPI, and the UI is a Streamlit dashboard. Ollama is used for local model inference, and Qdrant local mode is used for vector storage.  
+  
+2. Prerequisites  
+Required:  
+1. Git  
+2. Python 3.10+ recommended 3.11 or 3.12  
+3. Pip bundled with Python  
+4. Ollama local LLM runtime  
+5. Optional for OCR: Tesseract OCR if you want to extract text from image-based PDFs  
+  
+Optional for containerized setup:  
+1. Docker Desktop with Docker Compose  
+  
+3. Installation Steps Local, Windows 
+1. Clone the repository:  
+```  
+git clone https://github.com/OmFukat-Dev/Enterprise_Ai_Knowledge_Hub.git  
+```  
+2. Move into the project folder:  
+```  
+cd EnterpriseAIKnowledgeHub  
+```  
+3. Create the environment file from the example:  
+```  
+copy .env.example .env  
+```  
+4. Recommended: Create and activate a virtual environment:  
+```  
+python -m venv venv  
+venv\Scripts\activate  
+```  
+5. Install dependencies:  
+```  
+pip install -r requirements.txt  
+```  
+6. Install Ollama and download a model:  
+```  
+ollama pull llama3  
+```  
+  
+4. How to Run the Project 
+Option A: Run both frontend and backend with the helper script:  
+```  
+run.bat  
+```  
+  
+Option B: Run backend and frontend separately:  
+1. Backend FastAPI:  
+```  
+run_backend.bat  
+```  
+2. Frontend Streamlit:  
+```  
+run_frontend.bat  
+```  
+  
+Option C: Run manually:  
+1. Backend:  
+```  
+python -m uvicorn app:app --host 127.0.0.1 --port 8000 --log-level info  
+```  
+2. Frontend:  
+```  
+python -m streamlit run frontend\dashboard.py --server.port=8501 --server.address=127.0.0.1  
+```  
+  
+After startup:  
+- Frontend UI: `http://127.0.0.1:8501`  
+- Backend API docs: `http://127.0.0.1:8000/api/docs`  
+  
+5. Configuration Details  
+Main configuration files:  
+1. `.env` primary runtime configuration  
+2. `config\config.yaml` model and chunking defaults  
+3. `alembic.ini` database migration settings  
+  
+Key entry points:  
+- Backend API: `app.py`  
+- Frontend UI: `frontend\dashboard.py`  
+- Combined launcher: `main.py` used by `run.bat`  
+  
+6. Database Setup SQLite by default  
+Default database is SQLite and works out of the box:  
+- File: `enterprise_ai_hub.db`  
+- Config: `DATABASE_URL=sqlite+aiosqlite:///./enterprise_ai_hub.db`  
+  
+If you want to run migrations manually:  
+```  
+alembic upgrade head  
+``` 
+  
+Optional: Using PostgreSQL and pgvector advanced  
+1. Install PostgreSQL and pgvector extension.  
+2. Set these environment variables:  
+```  
+VECTOR_STORE_TYPE=pgvector  
+DB_HOST=localhost  
+DB_USER=postgres  
+DB_PASSWORD=postgres  
+DB_NAME=postgres  
+DATABASE_URL=postgresql+psycopg2://postgres:postgres@localhost:5432/postgres  
+```  
+3. Install pgvector dependencies:  
+```  
+pip install pgvector psycopg2-binary  
+```  
+  
+7. Environment Variables  
+Required from `.env.example`:  
+```  
+# Database  
+DATABASE_URL=sqlite+aiosqlite:///./enterprise_ai_hub.db  
+  
+# Vector store  
+VECTOR_STORE_TYPE=qdrant  
+QDRANT_PATH=./data/qdrant_db  
+QDRANT_COLLECTION=enterprise_knowledge  
+  
+# Local LLM via Ollama  
+LLM_MODEL=llama3  
+OLLAMA_HOST=http://127.0.0.1:11434  
+LLM_TEMPERATURE=0.1  
+LLM_MAX_TOKENS=2048  
+LLM_NUM_CTX=4096  
+  
+# Retrieval settings  
+RETRIEVAL_K=15  
+RERANK_TOP_K=5  
+SCORE_THRESHOLD=0.25  
+  
+# JWT/Auth  
+SECRET_KEY=replace-with-a-long-random-secret  
+JWT_SECRET_KEY=replace-with-a-long-random-jwt-secret  
+ALGORITHM=HS256  
+ACCESS_TOKEN_EXPIRE_MINUTES=30  
+``` 
+  
+Optional or advanced variables used in code:  
+```  
+# App  
+DEBUG=false  
+ENVIRONMENT=development  
+ALLOWED_ORIGINS=*  
+API_PREFIX=/api  
+  
+# Database pool SQLite ignores these  
+DB_POOL_SIZE=5  
+DB_MAX_OVERFLOW=10  
+  
+# LLM fallback and GPU control  
+OLLAMA_NUM_GPU=0  
+LLM_FALLBACK_NUM_CTX=4096  
+LLM_FALLBACK_MAX_TOKENS=1024  
+LLM_LOW_MEM_FALLBACK_MODEL=llama3.2:1b  
+  
+# Embedding and reranker models  
+EMBEDDING_MODEL=BAAI/bge-large-en-v1.5  
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-12-v2  
+  
+# Frontend and API routing  
+API_URL=http://127.0.0.1:8000/api  
+DIRECT_MODE=0  
+STREAMLIT_ONLY=0  
+ALLOW_GENERAL_ANSWER=0  
+  
+# PGVector support only if VECTOR_STORE_TYPE=pgvector  
+DB_HOST=localhost  
+DB_USER=postgres  
+DB_PASSWORD=postgres  
+DB_NAME=postgres  
+  
+# Alternate Qdrant connection not used in local mode  
+QDRANT_URL=http://localhost:6333  
+  
+# Redis not required by default  
+REDIS_URL=redis://localhost:6379/0  
+  
+# Test DB  
+TEST_DATABASE_URL=sqlite+aiosqlite:///./test.db  
+```  
+  
+8. Troubleshooting  
+1. Ollama is not running or connection errors:  
+- Start it: `ollama serve`  
+- Ensure the model is downloaded: `ollama pull llama3`  
+  
+2. Model not found in Ollama:  
+- Pull the model name from `LLM_MODEL`:  
+```  
+ollama pull MODEL_NAME  
+```  
+  
+3. Qdrant lock errors or DB issues:  
+- Stop all running app instances.  
+- Delete the local Qdrant folder to rebuild:  
+```  
+rd /s /q data\qdrant_db  
+```  
+  
+4. OCR does not work for scanned PDFs:  
+- Install Tesseract OCR and ensure it is on PATH.  
+  
+5. Streamlit opens but cannot answer questions:  
+- Make sure the backend is running unless DIRECT_MODE=1.  
+- Check API_URL in `.env`.  
+  
+9. Additional Notes  
+1. All models run locally. No paid API keys are required.  
+2. Upload limits are controlled by Streamlit `--server.maxUploadSize=200`.  
+3. Data is stored locally in `data\`, `upload\`, `tmp\`, and `logs\`.  
+4. For Docker usage, use `docker compose up --build` and keep Ollama running on the host at `http://127.0.0.1:11434`. 
